@@ -166,6 +166,40 @@ def recall_at_k(
     return hit / retrieved
 
 
+def hits_at_k(
+    model,
+    test_interactions,
+    train_interactions=None,
+    k=10,
+    user_features=None,
+    item_features=None,
+    preserve_rows=False,
+    num_threads=1,
+    check_intersections=True,
+):
+    if num_threads < 1:
+        raise ValueError("Number of threads must be 1 or larger.")
+
+    ranks = model.predict_rank(
+        test_interactions,
+        train_interactions=train_interactions,
+        user_features=user_features,
+        item_features=item_features,
+        num_threads=num_threads,
+        check_intersections=check_intersections,
+    )
+
+    ranks.data = np.less(ranks.data, k, ranks.data)
+
+    #retrieved = np.squeeze(test_interactions.getnnz(axis=1))
+    hit = np.squeeze(np.array(ranks.sum(axis=1)))
+
+    if not preserve_rows:
+        hit = hit[test_interactions.getnnz(axis=1) > 0]
+        #retrieved = retrieved[test_interactions.getnnz(axis=1) > 0]
+
+    return hit #/ retrieved
+
 def auc_score(
     model,
     test_interactions,
