@@ -1230,43 +1230,14 @@ def fit_sigma(CSRMatrix item_features,
                         do_reverse = False
                     else:
                         do_loss = False
+                loss = 0
                 if do_loss:
-                    loss = weight * log(max(1.0, floor((item_features.rows - 1) / sampled)))
-
-                    # Clip gradients for numerical stability.
-                    if loss > MAX_LOSS:
-                        loss = MAX_LOSS
-
-                    if do_reverse:
-                        warp_update(loss,
-                                    item_features,
-                                    user_features,
-                                    user_id,
-                                    negative_item_id,  # swapped
-                                    positive_item_id,  # swapped
-                                    user_repr,
-                                    neg_it_repr,       # swapped
-                                    pos_it_repr,       # swapped
-                                    lightfm,
-                                    item_alpha,
-                                    user_alpha)
-                    else:
-                        warp_update(loss,
-                                    item_features,
-                                    user_features,
-                                    user_id,
-                                    positive_item_id,
-                                    negative_item_id,
-                                    user_repr,
-                                    pos_it_repr,
-                                    neg_it_repr,
-                                    lightfm,
-                                    item_alpha,
-                                    user_alpha)
-                    break
-                loss = weight * log(fabs(fabs(negative_prediction - positive_prediction)/max_prediction - fabs(Y[counter] - Y[row])/max_data_val))
+                    loss = loss + weight * log(max(1.0, floor((item_features.rows - 1) / sampled)))
+                loss = loss + weight * log(fabs(fabs(negative_prediction - positive_prediction)/max_prediction - fabs(Y[counter] - Y[row])/max_data_val))
+                # Clip gradients for numerical stability.
                 if loss > MAX_LOSS:
                     loss = MAX_LOSS
+
                 if do_reverse:
                     warp_update(loss,
                                 item_features,
@@ -1293,6 +1264,8 @@ def fit_sigma(CSRMatrix item_features,
                                 lightfm,
                                 item_alpha,
                                 user_alpha)
+                if do_loss:
+                    break
 
             if lightfm.item_scale > MAX_REG_SCALE or lightfm.user_scale > MAX_REG_SCALE:
                 locked_regularize(lightfm,
