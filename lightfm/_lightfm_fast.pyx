@@ -1254,7 +1254,10 @@ def fit_sigma(CSRMatrix item_features,
                     break
                 else:
                     if do_reverse:
-                        loss = weight * sigmoid(negative_prediction - positive_prediction)
+                        
+                        loss = weight * log(abs(abs(negative_prediction - positive_prediction) - abs(Y[counter] - Y[row])))
+                        if loss > MAX_LOSS:
+                            loss = MAX_LOSS
                         warp_update(loss,
                                     item_features,
                                     user_features,
@@ -1268,7 +1271,9 @@ def fit_sigma(CSRMatrix item_features,
                                     item_alpha,
                                     user_alpha)
                     else:
-                        loss = weight * sigmoid(positive_prediction - negative_prediction)
+                        loss = weight * log(abs(abs(negative_prediction - positive_prediction) - abs(Y[counter] - Y[row])))
+                        if loss > MAX_LOSS:
+                            loss = MAX_LOSS
                         warp_update(loss,
                                     item_features,
                                     user_features,
