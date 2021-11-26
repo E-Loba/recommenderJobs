@@ -1109,14 +1109,15 @@ def fit_sigma(CSRMatrix item_features,
     Fit the model using the WARP loss.
     """
 
-    cdef int i, no_examples, user_id, positive_item_id, gamma
+    cdef int i, no_examples, user_id, positive_item_id, gamma, dummy_i
     cdef int negative_item_id, sampled, row
-    cdef double positive_prediction, negative_prediction
+    cdef double positive_prediction, negative_prediction, max_prediction, temp_pred
     cdef double loss, MAX_LOSS
     cdef flt weight
     cdef flt *user_repr
     cdef flt *pos_it_repr
     cdef flt *neg_it_repr
+    cdef flt *temp_repr
     cdef unsigned int[::1] random_states
     cdef bint do_loss, pred_up, truth_up, do_reverse
     cdef int counter, index_item, index_user
@@ -1128,6 +1129,7 @@ def fit_sigma(CSRMatrix item_features,
 
     no_examples = Y.shape[0]
     MAX_LOSS = 10.0
+    max_prediction = 0.0
 
     {nogil_block}
 
@@ -1140,7 +1142,6 @@ def fit_sigma(CSRMatrix item_features,
 
             user_id = user_ids[row]
             positive_item_id = item_ids[row]
-
             if not Y[row] > 0:
                 continue
 
@@ -1160,11 +1161,22 @@ def fit_sigma(CSRMatrix item_features,
                                    positive_item_id,
                                    lightfm.item_scale,
                                    pos_it_repr)
-
+            max_prediction = 0.0
+            for dummy_i in range(no_examples):
+                compute_representation(user_features,
+                                        lightfm.user_features,
+                                        lightfm.user_biases,
+                                        lightfm,
+                                        user_ids[dummy_i],
+                                        lightfm.user_scale,
+                                        temp_repr)
+                temp_pred = compute_prediction_from_repr(temp_repr,
+                                                        pos_it_repr,
+                                                        lightfm.no_components)
+                max_prediction = max(max_prediction, temp_pred)
             positive_prediction = compute_prediction_from_repr(user_repr,
                                                                pos_it_repr,
                                                                lightfm.no_components)
-
             sampled = 0
 
             while sampled < lightfm.max_sampled:
@@ -1195,7 +1207,6 @@ def fit_sigma(CSRMatrix item_features,
                         index_item = item_ids[counter]
                         index_user = user_ids[counter]
                     truth_up = Y[counter] > Y[row]
-                    #weight = weight * (abs(Y[row] - Y[counter]) / max_data_val)  # TODO
                     if pred_up and not truth_up:
                         do_loss = True
                         do_reverse = False
@@ -1205,21 +1216,12 @@ def fit_sigma(CSRMatrix item_features,
                     else:
                         do_loss = False
                 else:
-                    #weight = weight * (Y[row] / max_data_val)  # TODO
                     if negative_prediction > positive_prediction - 1:
                         do_loss = True
                         do_reverse = False
                     else:
                         do_loss = False
                 if do_loss:
-                #if negative_prediction > positive_prediction - 1:
-                    # Sample again if the sample negative is actually a positive
-                    # if in_positives(negative_item_id, user_id, interactions):
-                    #     continue
-                    # if interactions[user_id,item_id] < interactions[user_id,negative_item_id]
-                    #     #printf("%d\n", negative_item_id)
-                    #     continue
-
                     loss = weight * log(max(1.0, floor((item_features.rows - 1) / sampled)))
 
                     # Clip gradients for numerical stability.
@@ -1254,11 +1256,10 @@ def fit_sigma(CSRMatrix item_features,
                                     user_alpha)
                     break
                 else:
+                    loss = weight * log(fabs(fabs(negative_prediction - positive_prediction)/max_prediction - fabs(Y[counter] - Y[row])/max_data_val))
+                    if loss > MAX_LOSS:
+                        loss = MAX_LOSS
                     if do_reverse:
-                        
-                        loss = weight * log(fabs(fabs(negative_prediction - positive_prediction) - fabs(Y[counter] - Y[row])))
-                        if loss > MAX_LOSS:
-                            loss = MAX_LOSS
                         warp_update(loss,
                                     item_features,
                                     user_features,
@@ -1272,9 +1273,6 @@ def fit_sigma(CSRMatrix item_features,
                                     item_alpha,
                                     user_alpha)
                     else:
-                        loss = weight * log(fabs(fabs(negative_prediction - positive_prediction) - fabs(Y[counter] - Y[row])))
-                        if loss > MAX_LOSS:
-                            loss = MAX_LOSS
                         warp_update(loss,
                                     item_features,
                                     user_features,
