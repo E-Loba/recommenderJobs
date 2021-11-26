@@ -1233,7 +1233,7 @@ def fit_sigma(CSRMatrix item_features,
                 loss = 0
                 if do_loss:
                     loss = loss + weight * log(max(1.0, floor((item_features.rows - 1) / sampled)))
-                loss = loss + weight * log(fabs(fabs(negative_prediction - positive_prediction)/max_prediction - fabs(Y[counter] - Y[row])/max_data_val))
+                loss = loss + weight * log(fabs(fabs(negative_prediction - positive_prediction)/max_prediction - fabs(Y[counter] - Y[row])/max_data_val) + 1)
                 # Clip gradients for numerical stability.
                 if loss > MAX_LOSS:
                     loss = MAX_LOSS
