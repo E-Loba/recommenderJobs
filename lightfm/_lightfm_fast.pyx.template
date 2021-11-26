@@ -24,6 +24,7 @@ cdef extern from "math.h" nogil:
     double exp(double)
     double log(double)
     double floor(double)
+    double fabs(double)
 
 
 cdef extern from "stdlib.h" nogil:
@@ -1255,7 +1256,7 @@ def fit_sigma(CSRMatrix item_features,
                 else:
                     if do_reverse:
                         
-                        loss = weight * log(abs(abs(negative_prediction - positive_prediction) - abs(Y[counter] - Y[row])))
+                        loss = weight * log(fabs(fabs(negative_prediction - positive_prediction) - fabs(Y[counter] - Y[row])))
                         if loss > MAX_LOSS:
                             loss = MAX_LOSS
                         warp_update(loss,
@@ -1271,7 +1272,7 @@ def fit_sigma(CSRMatrix item_features,
                                     item_alpha,
                                     user_alpha)
                     else:
-                        loss = weight * log(abs(abs(negative_prediction - positive_prediction) - abs(Y[counter] - Y[row])))
+                        loss = weight * log(fabs(fabs(negative_prediction - positive_prediction) - fabs(Y[counter] - Y[row])))
                         if loss > MAX_LOSS:
                             loss = MAX_LOSS
                         warp_update(loss,
