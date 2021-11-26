@@ -211,7 +211,7 @@ class LightFM(object):
         assert 0 < rho < 1
         assert epsilon >= 0
         assert learning_schedule in ("adagrad", "adadelta")
-        assert loss in ("logistic", "warp", "bpr", "warp-kos", "jobs")
+        assert loss in ("logistic", "warp", "bpr", "warp-kos", "jobs", "sigma")
 
         if max_sampled < 1:
             raise ValueError("max_sampled must be a positive integer")
