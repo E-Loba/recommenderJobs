@@ -679,7 +679,7 @@ class LightFM(object):
         Run an individual epoch.
         """
 
-        if loss in ("warp", "bpr", "warp-kos", "jobs"):
+        if loss in ("warp", "bpr", "warp-kos", "jobs", "sigma"):
             # The CSR conversion needs to happen before shuffle indices are created.
             # Calling .tocsr may result in a change in the data arrays of the COO matrix,
             positives_lookup = CSRMatrix(
@@ -711,6 +711,25 @@ class LightFM(object):
                 self.random_state,
             )
         elif loss == "jobs":
+            # print("\ndoing jobs!\n")
+            fit_jobs(
+                CSRMatrix(item_features),
+                CSRMatrix(user_features),
+                positives_lookup,
+                interactions.row,
+                interactions.col,
+                interactions.data,
+                sample_weight,
+                shuffle_indices,
+                lightfm_data,
+                self.learning_rate,
+                self.item_alpha,
+                self.user_alpha,
+                num_threads,
+                self.random_state,
+                float(interactions.data.max())
+            )
+        elif loss == "sigma":
             # print("\ndoing jobs!\n")
             fit_jobs(
                 CSRMatrix(item_features),
