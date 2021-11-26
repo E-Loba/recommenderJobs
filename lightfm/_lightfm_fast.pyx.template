@@ -1117,7 +1117,8 @@ def fit_sigma(CSRMatrix item_features,
     cdef flt *user_repr
     cdef flt *pos_it_repr
     cdef flt *neg_it_repr
-    cdef flt *temp_repr
+    cdef flt *temp_usr_repr
+    cdef flt *temp_itm_repr
     cdef unsigned int[::1] random_states
     cdef bint do_loss, pred_up, truth_up, do_reverse
     cdef int counter, index_item, index_user
@@ -1169,9 +1170,17 @@ def fit_sigma(CSRMatrix item_features,
                                         lightfm,
                                         user_ids[dummy_i],
                                         lightfm.user_scale,
-                                        temp_repr)
-                temp_pred = compute_prediction_from_repr(temp_repr,
-                                                        pos_it_repr,
+                                        temp_usr_repr)
+                
+                compute_representation(item_features,
+                                        lightfm.item_features,
+                                        lightfm.item_biases,
+                                        lightfm,
+                                        item_ids[dummy_i],
+                                        lightfm.item_scale,
+                                        temp_itm_repr)
+                temp_pred = compute_prediction_from_repr(temp_usr_repr,
+                                                        temp_itm_repr,
                                                         lightfm.no_components)
                 max_prediction = max(max_prediction, temp_pred)
             positive_prediction = compute_prediction_from_repr(user_repr,
@@ -1255,36 +1264,35 @@ def fit_sigma(CSRMatrix item_features,
                                     item_alpha,
                                     user_alpha)
                     break
+                loss = weight * log(fabs(fabs(negative_prediction - positive_prediction)/max_prediction - fabs(Y[counter] - Y[row])/max_data_val))
+                if loss > MAX_LOSS:
+                    loss = MAX_LOSS
+                if do_reverse:
+                    warp_update(loss,
+                                item_features,
+                                user_features,
+                                user_id,
+                                negative_item_id,  # swapped
+                                positive_item_id,  # swapped
+                                user_repr,
+                                neg_it_repr,       # swapped
+                                pos_it_repr,       # swapped
+                                lightfm,
+                                item_alpha,
+                                user_alpha)
                 else:
-                    loss = weight * log(fabs(fabs(negative_prediction - positive_prediction)/max_prediction - fabs(Y[counter] - Y[row])/max_data_val))
-                    if loss > MAX_LOSS:
-                        loss = MAX_LOSS
-                    if do_reverse:
-                        warp_update(loss,
-                                    item_features,
-                                    user_features,
-                                    user_id,
-                                    negative_item_id,  # swapped
-                                    positive_item_id,  # swapped
-                                    user_repr,
-                                    neg_it_repr,       # swapped
-                                    pos_it_repr,       # swapped
-                                    lightfm,
-                                    item_alpha,
-                                    user_alpha)
-                    else:
-                        warp_update(loss,
-                                    item_features,
-                                    user_features,
-                                    user_id,
-                                    positive_item_id,
-                                    negative_item_id,
-                                    user_repr,
-                                    pos_it_repr,
-                                    neg_it_repr,
-                                    lightfm,
-                                    item_alpha,
-                                    user_alpha)
+                    warp_update(loss,
+                                item_features,
+                                user_features,
+                                user_id,
+                                positive_item_id,
+                                negative_item_id,
+                                user_repr,
+                                pos_it_repr,
+                                neg_it_repr,
+                                lightfm,
+                                item_alpha,
+                                user_alpha)
 
             if lightfm.item_scale > MAX_REG_SCALE or lightfm.user_scale > MAX_REG_SCALE:
                 locked_regularize(lightfm,
