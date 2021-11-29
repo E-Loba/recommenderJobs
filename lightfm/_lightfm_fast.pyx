@@ -1234,7 +1234,7 @@ def fit_sigma(CSRMatrix item_features,
                         do_reverse = False
                     else:
                         do_loss = False
-                        do_reverse = True
+                        do_reverse = False
                 loss = 0
                 if do_loss:
                     loss = loss + weight * log(max(1.0, floor((item_features.rows - 1) / sampled)))
