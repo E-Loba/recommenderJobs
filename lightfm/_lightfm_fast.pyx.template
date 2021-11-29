@@ -1113,7 +1113,7 @@ def fit_sigma(CSRMatrix item_features,
     cdef int negative_item_id, sampled, row
     cdef double positive_prediction, negative_prediction, max_prediction, temp_pred
     cdef double loss, MAX_LOSS
-    cdef flt weight
+    cdef flt weight, delta_
     cdef flt *user_repr
     cdef flt *pos_it_repr
     cdef flt *neg_it_repr
@@ -1238,7 +1238,19 @@ def fit_sigma(CSRMatrix item_features,
                 loss = 0
                 if do_loss:
                     loss = loss + weight * log(max(1.0, floor((item_features.rows - 1) / sampled)))
-                loss = loss + weight * log(fabs(fabs(negative_prediction - positive_prediction)/max_prediction - fabs(Y[counter] - Y[row])/max_data_val) + 1)
+                else:
+                    delta_ = fabs(negative_prediction - positive_prediction)/max_prediction - fabs(Y[counter] - Y[row])/max_data_val
+                    if delta_ > 0:
+                        if truth_up:
+                            do_reverse = True
+                        else:
+                            do_reverse = False
+                    else:
+                        if truth_up:
+                            do_reverse = False
+                        else:
+                            do_reverse = True
+                    loss = loss + weight * log(fabs(delta) + 1)
                 # Clip gradients for numerical stability.
                 if loss > MAX_LOSS:
                     loss = MAX_LOSS
