@@ -1250,7 +1250,7 @@ def fit_sigma(CSRMatrix item_features,
                             do_reverse = False
                         else:
                             do_reverse = True
-                    loss = loss + weight * log(fabs(delta) + 1)
+                    loss = loss + weight * log(fabs(delta_) + 1)
                 # Clip gradients for numerical stability.
                 if loss > MAX_LOSS:
                     loss = MAX_LOSS
