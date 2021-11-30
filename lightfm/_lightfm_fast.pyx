@@ -1090,7 +1090,7 @@ def fit_jobs(CSRMatrix item_features,
                user_alpha)
 
 
-def fit_sigma(CSRMatrix item_features,
+def fit_joint(CSRMatrix item_features,
              CSRMatrix user_features,
              CSRMatrix interactions,
              int[::1] user_ids,
@@ -1283,6 +1283,193 @@ def fit_sigma(CSRMatrix item_features,
                                 user_alpha)
                 if do_loss:
                     break
+
+            if lightfm.item_scale > MAX_REG_SCALE or lightfm.user_scale > MAX_REG_SCALE:
+                locked_regularize(lightfm,
+                                  item_alpha,
+                                  user_alpha)
+
+        free(user_repr)
+        free(pos_it_repr)
+        free(neg_it_repr)
+
+    regularize(lightfm,
+               item_alpha,
+               user_alpha)
+
+
+def fit_sigma(CSRMatrix item_features,
+             CSRMatrix user_features,
+             CSRMatrix interactions,
+             int[::1] user_ids,
+             int[::1] item_ids,
+             flt[::1] Y,
+             flt[::1] sample_weight,
+             int[::1] shuffle_indices,
+             FastLightFM lightfm,
+             double learning_rate,
+             double item_alpha,
+             double user_alpha,
+             int num_threads,
+             random_state,
+             flt max_data_val):
+    """
+    Fit the model using the WARP loss.
+    """
+
+    cdef int i, no_examples, user_id, positive_item_id, gamma, dummy_i
+    cdef int negative_item_id, sampled, row
+    cdef double positive_prediction, negative_prediction, max_prediction, temp_pred
+    cdef double loss, MAX_LOSS
+    cdef flt weight, delta_
+    cdef flt *user_repr
+    cdef flt *pos_it_repr
+    cdef flt *neg_it_repr
+    cdef flt *temp_usr_repr
+    cdef flt *temp_itm_repr
+    cdef unsigned int[::1] random_states
+    cdef bint do_loss, pred_up, truth_up, do_reverse
+    cdef int counter, index_item, index_user
+    cdef flt rank_diff
+
+    random_states = random_state.randint(0,
+                                         np.iinfo(np.int32).max,
+                                         size=num_threads).astype(np.uint32)
+
+    no_examples = Y.shape[0]
+    MAX_LOSS = 10.0
+    max_prediction = 0.0
+
+    {nogil_block}
+
+        user_repr = <flt *>malloc(sizeof(flt) * (lightfm.no_components + 1))
+        pos_it_repr = <flt *>malloc(sizeof(flt) * (lightfm.no_components + 1))
+        neg_it_repr = <flt *>malloc(sizeof(flt) * (lightfm.no_components + 1))
+
+        for i in {range_block}(no_examples):
+            row = shuffle_indices[i]
+
+            user_id = user_ids[row]
+            positive_item_id = item_ids[row]
+            if not Y[row] > 0:
+                continue
+
+            weight = sample_weight[row]
+
+            compute_representation(user_features,
+                                   lightfm.user_features,
+                                   lightfm.user_biases,
+                                   lightfm,
+                                   user_id,
+                                   lightfm.user_scale,
+                                   user_repr)
+            compute_representation(item_features,
+                                   lightfm.item_features,
+                                   lightfm.item_biases,
+                                   lightfm,
+                                   positive_item_id,
+                                   lightfm.item_scale,
+                                   pos_it_repr)
+            max_prediction = 0.0
+            for dummy_i in range(no_examples):
+                compute_representation(user_features,
+                                        lightfm.user_features,
+                                        lightfm.user_biases,
+                                        lightfm,
+                                        user_ids[dummy_i],
+                                        lightfm.user_scale,
+                                        temp_usr_repr)
+                
+                compute_representation(item_features,
+                                        lightfm.item_features,
+                                        lightfm.item_biases,
+                                        lightfm,
+                                        item_ids[dummy_i],
+                                        lightfm.item_scale,
+                                        temp_itm_repr)
+                temp_pred = compute_prediction_from_repr(temp_usr_repr,
+                                                        temp_itm_repr,
+                                                        lightfm.no_components)
+                max_prediction = max(max_prediction, temp_pred)
+            positive_prediction = compute_prediction_from_repr(user_repr,
+                                                               pos_it_repr,
+                                                               lightfm.no_components)
+            sampled = 0
+
+            while sampled < lightfm.max_sampled:
+
+                sampled = sampled + 1
+                negative_item_id = (rand_r(&random_states[{thread_num}])
+                                    % item_features.rows)
+                compute_representation(item_features,
+                                       lightfm.item_features,
+                                       lightfm.item_biases,
+                                       lightfm,
+                                       negative_item_id,
+                                       lightfm.item_scale,
+                                       neg_it_repr)
+
+                negative_prediction = compute_prediction_from_repr(user_repr,
+                                                                   neg_it_repr,
+                                                                   lightfm.no_components)
+
+                do_reverse = False
+                if in_positives(negative_item_id, user_id, interactions):
+                    pred_up = negative_prediction > positive_prediction - 1
+                    counter = 0
+                    index_item = item_ids[counter]
+                    index_user = user_ids[counter]
+                    while not (index_item == negative_item_id) and not (index_user == user_id):
+                        counter = counter + 1
+                        index_item = item_ids[counter]
+                        index_user = user_ids[counter]
+                    truth_up = Y[counter] > Y[row]
+                    if pred_up and not truth_up:
+                        do_reverse = False
+                    elif truth_up and not pred_up:
+                        do_reverse = True
+                    else:
+                        do_loss = False
+                        if truth_up:
+                            do_reverse = True
+                        else:
+                            do_reverse = False
+                else:
+                    if negative_prediction > positive_prediction - 1:
+                        do_reverse = False
+                    else:
+                        do_reverse = False
+                loss = weight * sigmoid(positive_prediction - negative_prediction)
+                # Clip gradients for numerical stability.
+                if loss > MAX_LOSS:
+                    loss = MAX_LOSS
+
+                if do_reverse:
+                    warp_update(loss,
+                                item_features,
+                                user_features,
+                                user_id,
+                                negative_item_id,  # swapped
+                                positive_item_id,  # swapped
+                                user_repr,
+                                neg_it_repr,       # swapped
+                                pos_it_repr,       # swapped
+                                lightfm,
+                                item_alpha,
+                                user_alpha)
+                else:
+                    warp_update(loss,
+                                item_features,
+                                user_features,
+                                user_id,
+                                positive_item_id,
+                                negative_item_id,
+                                user_repr,
+                                pos_it_repr,
+                                neg_it_repr,
+                                lightfm,
+                                item_alpha,
+                                user_alpha)
 
             if lightfm.item_scale > MAX_REG_SCALE or lightfm.user_scale > MAX_REG_SCALE:
                 locked_regularize(lightfm,
