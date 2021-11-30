@@ -1298,6 +1298,190 @@ def fit_sigma(CSRMatrix item_features,
                user_alpha)
 
 
+def fit_dist(CSRMatrix item_features,
+             CSRMatrix user_features,
+             CSRMatrix interactions,
+             int[::1] user_ids,
+             int[::1] item_ids,
+             flt[::1] Y,
+             flt[::1] sample_weight,
+             int[::1] shuffle_indices,
+             FastLightFM lightfm,
+             double learning_rate,
+             double item_alpha,
+             double user_alpha,
+             int num_threads,
+             random_state,
+             flt max_data_val):
+    """
+    Fit the model using the WARP loss.
+    """
+
+    cdef int i, no_examples, user_id, positive_item_id, gamma, dummy_i
+    cdef int negative_item_id, sampled, row
+    cdef double positive_prediction, negative_prediction, max_prediction, temp_pred
+    cdef double loss, MAX_LOSS
+    cdef flt weight, delta_
+    cdef flt *user_repr
+    cdef flt *pos_it_repr
+    cdef flt *neg_it_repr
+    cdef flt *temp_usr_repr
+    cdef flt *temp_itm_repr
+    cdef unsigned int[::1] random_states
+    cdef bint do_loss, pred_up, truth_up, do_reverse
+    cdef int counter, index_item, index_user
+    cdef flt rank_diff
+
+    random_states = random_state.randint(0,
+                                         np.iinfo(np.int32).max,
+                                         size=num_threads).astype(np.uint32)
+
+    no_examples = Y.shape[0]
+    MAX_LOSS = 10.0
+    max_prediction = 0.0
+
+    {nogil_block}
+
+        user_repr = <flt *>malloc(sizeof(flt) * (lightfm.no_components + 1))
+        pos_it_repr = <flt *>malloc(sizeof(flt) * (lightfm.no_components + 1))
+        neg_it_repr = <flt *>malloc(sizeof(flt) * (lightfm.no_components + 1))
+
+        for i in {range_block}(no_examples):
+            row = shuffle_indices[i]
+
+            user_id = user_ids[row]
+            positive_item_id = item_ids[row]
+            if not Y[row] > 0:
+                continue
+
+            weight = sample_weight[row]
+
+            compute_representation(user_features,
+                                   lightfm.user_features,
+                                   lightfm.user_biases,
+                                   lightfm,
+                                   user_id,
+                                   lightfm.user_scale,
+                                   user_repr)
+            compute_representation(item_features,
+                                   lightfm.item_features,
+                                   lightfm.item_biases,
+                                   lightfm,
+                                   positive_item_id,
+                                   lightfm.item_scale,
+                                   pos_it_repr)
+            max_prediction = 0.0
+            for dummy_i in range(no_examples):
+                compute_representation(user_features,
+                                        lightfm.user_features,
+                                        lightfm.user_biases,
+                                        lightfm,
+                                        user_ids[dummy_i],
+                                        lightfm.user_scale,
+                                        temp_usr_repr)
+                
+                compute_representation(item_features,
+                                        lightfm.item_features,
+                                        lightfm.item_biases,
+                                        lightfm,
+                                        item_ids[dummy_i],
+                                        lightfm.item_scale,
+                                        temp_itm_repr)
+                temp_pred = compute_prediction_from_repr(temp_usr_repr,
+                                                        temp_itm_repr,
+                                                        lightfm.no_components)
+                max_prediction = max(max_prediction, temp_pred)
+            positive_prediction = compute_prediction_from_repr(user_repr,
+                                                               pos_it_repr,
+                                                               lightfm.no_components)
+            sampled = 0
+
+            while sampled < lightfm.max_sampled:
+
+                sampled = sampled + 1
+                negative_item_id = (rand_r(&random_states[{thread_num}])
+                                    % item_features.rows)
+                compute_representation(item_features,
+                                       lightfm.item_features,
+                                       lightfm.item_biases,
+                                       lightfm,
+                                       negative_item_id,
+                                       lightfm.item_scale,
+                                       neg_it_repr)
+
+                negative_prediction = compute_prediction_from_repr(user_repr,
+                                                                   neg_it_repr,
+                                                                   lightfm.no_components)
+                
+                if negative_prediction > positive_prediction - 1:
+                    do_loss = True
+                    # Sample again if the sample negative is actually a positive
+                    if in_positives(negative_item_id, user_id, interactions):
+                        do_loss = False
+                loss = 0
+                if do_loss:
+                    loss = loss + weight * log(max(1.0, floor((item_features.rows - 1) / sampled)))
+                    do_reverse = False
+                else:
+                    delta_ = fabs(negative_prediction - positive_prediction)/max_prediction - fabs(Y[counter] - Y[row])/max_data_val
+                    if delta_ > 0:
+                        if truth_up:
+                            do_reverse = True
+                        else:
+                            do_reverse = False
+                    else:
+                        if truth_up:
+                            do_reverse = False
+                        else:
+                            do_reverse = True
+                    loss = loss + weight * log(fabs(delta_) + 1)
+                # Clip gradients for numerical stability.
+                if loss > MAX_LOSS:
+                    loss = MAX_LOSS
+
+                if do_reverse:
+                    warp_update(loss,
+                                item_features,
+                                user_features,
+                                user_id,
+                                negative_item_id,  # swapped
+                                positive_item_id,  # swapped
+                                user_repr,
+                                neg_it_repr,       # swapped
+                                pos_it_repr,       # swapped
+                                lightfm,
+                                item_alpha,
+                                user_alpha)
+                else:
+                    warp_update(loss,
+                                item_features,
+                                user_features,
+                                user_id,
+                                positive_item_id,
+                                negative_item_id,
+                                user_repr,
+                                pos_it_repr,
+                                neg_it_repr,
+                                lightfm,
+                                item_alpha,
+                                user_alpha)
+                if do_loss:
+                    break
+
+            if lightfm.item_scale > MAX_REG_SCALE or lightfm.user_scale > MAX_REG_SCALE:
+                locked_regularize(lightfm,
+                                  item_alpha,
+                                  user_alpha)
+
+        free(user_repr)
+        free(pos_it_repr)
+        free(neg_it_repr)
+
+    regularize(lightfm,
+               item_alpha,
+               user_alpha)
+
+
 def fit_warp_kos(CSRMatrix item_features,
                  CSRMatrix user_features,
                  CSRMatrix data,

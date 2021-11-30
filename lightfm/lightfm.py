@@ -14,7 +14,8 @@ from ._lightfm_fast import (
     fit_warp_kos,
     predict_lightfm,
     predict_ranks,
-    fit_jobs
+    fit_jobs,
+    fit_dist
 )
 
 __all__ = ["LightFM"]
@@ -211,7 +212,7 @@ class LightFM(object):
         assert 0 < rho < 1
         assert epsilon >= 0
         assert learning_schedule in ("adagrad", "adadelta")
-        assert loss in ("logistic", "warp", "bpr", "warp-kos", "jobs", "sigma")
+        assert loss in ("logistic", "warp", "bpr", "warp-kos", "jobs", "sigma", "dist")
 
         if max_sampled < 1:
             raise ValueError("max_sampled must be a positive integer")
@@ -679,7 +680,7 @@ class LightFM(object):
         Run an individual epoch.
         """
 
-        if loss in ("warp", "bpr", "warp-kos", "jobs", "sigma"):
+        if loss in ("warp", "bpr", "warp-kos", "jobs", "sigma", "dist"):
             # The CSR conversion needs to happen before shuffle indices are created.
             # Calling .tocsr may result in a change in the data arrays of the COO matrix,
             positives_lookup = CSRMatrix(
@@ -732,6 +733,25 @@ class LightFM(object):
         elif loss == "sigma":
             # print("\ndoing jobs!\n")
             fit_jobs(
+                CSRMatrix(item_features),
+                CSRMatrix(user_features),
+                positives_lookup,
+                interactions.row,
+                interactions.col,
+                interactions.data,
+                sample_weight,
+                shuffle_indices,
+                lightfm_data,
+                self.learning_rate,
+                self.item_alpha,
+                self.user_alpha,
+                num_threads,
+                self.random_state,
+                float(interactions.data.max())
+            )
+        elif loss == "dist":
+            # print("\ndoing jobs!\n")
+            fit_dist(
                 CSRMatrix(item_features),
                 CSRMatrix(user_features),
                 positives_lookup,
