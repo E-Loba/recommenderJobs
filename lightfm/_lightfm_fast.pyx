@@ -1017,7 +1017,6 @@ def fit_jobs(CSRMatrix item_features,
                         index_item = item_ids[counter]
                         index_user = user_ids[counter]
                     truth_up = Y[counter] > Y[row]
-                    #weight = weight * (abs(Y[row] - Y[counter]) / max_data_val)  # TODO
                     if pred_up and not truth_up:
                         do_loss = True
                         do_reverse = False
@@ -1027,20 +1026,12 @@ def fit_jobs(CSRMatrix item_features,
                     else:
                         do_loss = False
                 else:
-                    #weight = weight * (Y[row] / max_data_val)  # TODO
                     if negative_prediction > positive_prediction - 1:
                         do_loss = True
                         do_reverse = False
                     else:
                         do_loss = False
                 if do_loss:
-                #if negative_prediction > positive_prediction - 1:
-                    # Sample again if the sample negative is actually a positive
-                    # if in_positives(negative_item_id, user_id, interactions):
-                    #     continue
-                    # if interactions[user_id,item_id] < interactions[user_id,negative_item_id]
-                    #     #printf("%d\n", negative_item_id)
-                    #     continue
 
                     loss = weight * log(max(1.0, floor((item_features.rows - 1) / sampled)))
 
