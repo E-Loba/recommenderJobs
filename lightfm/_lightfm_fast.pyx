@@ -1128,7 +1128,7 @@ def fit_joint(CSRMatrix item_features,
         user_repr = <flt *>malloc(sizeof(flt) * (lightfm.no_components + 1))
         pos_it_repr = <flt *>malloc(sizeof(flt) * (lightfm.no_components + 1))
         neg_it_repr = <flt *>malloc(sizeof(flt) * (lightfm.no_components + 1))
-        temp_itm_repr = <flt *>malloc(sizeof(flt) * (lightfm.no_components + 1)
+        temp_itm_repr = <flt *>malloc(sizeof(flt) * (lightfm.no_components + 1))
         temp_usr_repr = <flt *>malloc(sizeof(flt) * (lightfm.no_components + 1))
 
         for i in {range_block}(no_examples):
@@ -1338,7 +1338,7 @@ def fit_sigma(CSRMatrix item_features,
         user_repr = <flt *>malloc(sizeof(flt) * (lightfm.no_components + 1))
         pos_it_repr = <flt *>malloc(sizeof(flt) * (lightfm.no_components + 1))
         neg_it_repr = <flt *>malloc(sizeof(flt) * (lightfm.no_components + 1))
-        temp_itm_repr = <flt *>malloc(sizeof(flt) * (lightfm.no_components + 1)
+        temp_itm_repr = <flt *>malloc(sizeof(flt) * (lightfm.no_components + 1))
         temp_usr_repr = <flt *>malloc(sizeof(flt) * (lightfm.no_components + 1))
 
         for i in {range_block}(no_examples):
@@ -1519,7 +1519,7 @@ def fit_dist(CSRMatrix item_features,
         user_repr = <flt *>malloc(sizeof(flt) * (lightfm.no_components + 1))
         pos_it_repr = <flt *>malloc(sizeof(flt) * (lightfm.no_components + 1))
         neg_it_repr = <flt *>malloc(sizeof(flt) * (lightfm.no_components + 1))
-        temp_itm_repr = <flt *>malloc(sizeof(flt) * (lightfm.no_components + 1)
+        temp_itm_repr = <flt *>malloc(sizeof(flt) * (lightfm.no_components + 1))
         temp_usr_repr = <flt *>malloc(sizeof(flt) * (lightfm.no_components + 1))
 
         for i in {range_block}(no_examples):
