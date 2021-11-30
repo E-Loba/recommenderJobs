@@ -1424,27 +1424,18 @@ def fit_sigma(CSRMatrix item_features,
                         index_item = item_ids[counter]
                         index_user = user_ids[counter]
                     truth_up = Y[counter] > Y[row]
-                    if pred_up and not truth_up:
-                        do_reverse = False
-                    elif truth_up and not pred_up:
+                    if truth_up:
                         do_reverse = True
                     else:
-                        do_loss = False
-                        if truth_up:
-                            do_reverse = True
-                        else:
-                            do_reverse = False
+                        do_reverse = False
                 else:
-                    if negative_prediction > positive_prediction - 1:
-                        do_reverse = False
-                    else:
-                        do_reverse = False
-                loss = weight * sigmoid(positive_prediction - negative_prediction)
+                    do_reverse = False
                 # Clip gradients for numerical stability.
                 if loss > MAX_LOSS:
                     loss = MAX_LOSS
 
                 if do_reverse:
+                    loss = weight * sigmoid(negative_prediction - positive_prediction)
                     warp_update(loss,
                                 item_features,
                                 user_features,
@@ -1458,6 +1449,7 @@ def fit_sigma(CSRMatrix item_features,
                                 item_alpha,
                                 user_alpha)
                 else:
+                    loss = weight * sigmoid(positive_prediction - negative_prediction)
                     warp_update(loss,
                                 item_features,
                                 user_features,
