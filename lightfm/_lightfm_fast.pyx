@@ -1103,8 +1103,8 @@ def fit_joint(CSRMatrix item_features,
     cdef int i, no_examples, user_id, positive_item_id, gamma, dummy_i
     cdef int negative_item_id, sampled, row
     cdef double positive_prediction, negative_prediction, max_prediction, temp_pred
-    cdef double loss, MAX_LOSS
-    cdef flt weight, delta_
+    cdef double loss, MAX_LOSS, delta_
+    cdef flt weight
     cdef flt *user_repr
     cdef flt *pos_it_repr
     cdef flt *neg_it_repr
@@ -1285,6 +1285,8 @@ def fit_joint(CSRMatrix item_features,
         free(user_repr)
         free(pos_it_repr)
         free(neg_it_repr)
+        free(temp_itm_repr)
+        free(temp_usr_repr)
 
     regularize(lightfm,
                item_alpha,
@@ -1466,6 +1468,8 @@ def fit_sigma(CSRMatrix item_features,
         free(user_repr)
         free(pos_it_repr)
         free(neg_it_repr)
+        free(temp_itm_repr)
+        free(temp_usr_repr)
 
     regularize(lightfm,
                item_alpha,
@@ -1652,6 +1656,8 @@ def fit_dist(CSRMatrix item_features,
         free(user_repr)
         free(pos_it_repr)
         free(neg_it_repr)
+        free(temp_itm_repr)
+        free(temp_usr_repr)
 
     regularize(lightfm,
                item_alpha,
