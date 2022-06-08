@@ -17,12 +17,14 @@ from ._lightfm_fast import (
     fit_jobs,
     fit_dist,
     fit_sigma,
-    fit_joint
+    fit_joint,
+    fit_mse
 )
 
 __all__ = ["LightFM"]
 
 CYTHON_DTYPE = np.float32
+MY_LOSSES = ("logistic", "mse", "warp", "bpr", "warp-kos", "jobs", "sigma", "dist", "joint")
 
 
 class LightFM(object):
@@ -214,7 +216,7 @@ class LightFM(object):
         assert 0 < rho < 1
         assert epsilon >= 0
         assert learning_schedule in ("adagrad", "adadelta")
-        assert loss in ("logistic", "warp", "bpr", "warp-kos", "jobs", "sigma", "dist", "joint")
+        assert loss in MY_LOSSES
 
         if max_sampled < 1:
             raise ValueError("max_sampled must be a positive integer")
@@ -504,6 +506,8 @@ class LightFM(object):
         epochs=1,
         num_threads=1,
         verbose=False,
+        my_max=10,
+        my_min=1
     ):
         """
         Fit the model.
@@ -559,6 +563,8 @@ class LightFM(object):
             epochs=epochs,
             num_threads=num_threads,
             verbose=verbose,
+            my_max=my_max,
+            my_min=my_min
         )
 
     def fit_partial(
@@ -570,6 +576,8 @@ class LightFM(object):
         epochs=1,
         num_threads=1,
         verbose=False,
+        my_min=1,
+        my_max=10
     ):
         """
         Fit the model.
@@ -663,6 +671,8 @@ class LightFM(object):
                 sample_weight_data,
                 num_threads,
                 self.loss,
+                my_max=my_max,
+                my_min=my_min
             )
 
             self._check_finite()
@@ -677,6 +687,8 @@ class LightFM(object):
         sample_weight,
         num_threads,
         loss,
+        my_min=1,
+        my_max=10
     ):
         """
         Run an individual epoch.
@@ -821,6 +833,23 @@ class LightFM(object):
                 self.n,
                 num_threads,
                 self.random_state,
+            )
+        elif loss == 'mse':
+            fit_mse(
+                CSRMatrix(item_features),
+                CSRMatrix(user_features),
+                interactions.row,
+                interactions.col,
+                interactions.data,
+                sample_weight,
+                shuffle_indices,
+                lightfm_data,
+                self.learning_rate,
+                self.item_alpha,
+                self.user_alpha,
+                num_threads,
+                my_max,
+                my_min
             )
         else:
             fit_logistic(

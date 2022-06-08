@@ -782,6 +782,95 @@ def fit_logistic(CSRMatrix item_features,
                user_alpha)
 
 
+def fit_mse(CSRMatrix item_features,
+                 CSRMatrix user_features,
+                 int[::1] user_ids,
+                 int[::1] item_ids,
+                 flt[::1] Y,
+                 flt[::1] sample_weight,
+                 int[::1] shuffle_indices,
+                 FastLightFM lightfm,
+                 double learning_rate,
+                 double item_alpha,
+                 double user_alpha,
+                 int num_threads,
+                 int mymax,
+                 int mymin):
+    """
+    Fit the LightFM model.
+    """
+
+    cdef int i, no_examples, user_id, item_id, row
+    cdef double prediction, loss
+    cdef int y
+    cdef flt y_row, weight
+    cdef flt *user_repr
+    cdef flt *it_repr
+
+    no_examples = Y.shape[0]
+
+    {nogil_block}
+
+        user_repr = <flt *>malloc(sizeof(flt) * (lightfm.no_components + 1))
+        it_repr = <flt *>malloc(sizeof(flt) * (lightfm.no_components + 1))
+
+        for i in {range_block}(no_examples):
+
+            row = shuffle_indices[i]
+
+            user_id = user_ids[row]
+            item_id = item_ids[row]
+            weight = sample_weight[row]
+
+            compute_representation(user_features,
+                                   lightfm.user_features,
+                                   lightfm.user_biases,
+                                   lightfm,
+                                   user_id,
+                                   lightfm.user_scale,
+                                   user_repr)
+            compute_representation(item_features,
+                                   lightfm.item_features,
+                                   lightfm.item_biases,
+                                   lightfm,
+                                   item_id,
+                                   lightfm.item_scale,
+                                   it_repr)
+
+            prediction = sigmoid(compute_prediction_from_repr(user_repr,
+                                                              it_repr,
+                                                              lightfm.no_components))
+            prediction = prediction * (mymax - mymin) + mymin
+
+            # Any value less or equal to zero
+            # is a negative interaction.
+            y_row = Y[row]
+
+            loss = (prediction - y) * (prediction - y)
+            update(loss,
+                   item_features,
+                   user_features,
+                   user_id,
+                   item_id,
+                   user_repr,
+                   it_repr,
+                   lightfm,
+                   item_alpha,
+                   user_alpha)
+
+            if lightfm.item_scale > MAX_REG_SCALE or lightfm.user_scale > MAX_REG_SCALE:
+                locked_regularize(lightfm,
+                                  item_alpha,
+                                  user_alpha)
+
+        free(user_repr)
+        free(it_repr)
+
+    regularize(lightfm,
+               item_alpha,
+               user_alpha)
+
+
 def fit_warp(CSRMatrix item_features,
              CSRMatrix user_features,
              CSRMatrix interactions,
@@ -1164,7 +1253,7 @@ def fit_joint(CSRMatrix item_features,
                                         user_ids[dummy_i],
                                         lightfm.user_scale,
                                         temp_usr_repr)
-                
+
                 compute_representation(item_features,
                                         lightfm.item_features,
                                         lightfm.item_biases,
@@ -1376,7 +1465,7 @@ def fit_sigma(CSRMatrix item_features,
                                         user_ids[dummy_i],
                                         lightfm.user_scale,
                                         temp_usr_repr)
-                
+
                 compute_representation(item_features,
                                         lightfm.item_features,
                                         lightfm.item_biases,
@@ -1559,7 +1648,7 @@ def fit_dist(CSRMatrix item_features,
                                         user_ids[dummy_i],
                                         lightfm.user_scale,
                                         temp_usr_repr)
-                
+
                 compute_representation(item_features,
                                         lightfm.item_features,
                                         lightfm.item_biases,
@@ -1592,7 +1681,7 @@ def fit_dist(CSRMatrix item_features,
                 negative_prediction = compute_prediction_from_repr(user_repr,
                                                                    neg_it_repr,
                                                                    lightfm.no_components)
-                
+
                 if negative_prediction > positive_prediction - 1:
                     do_loss = True
                     # Sample again if the sample negative is actually a positive
